@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <pthread.h>
 
 typedef struct heap_block {
 
@@ -13,6 +14,7 @@ typedef struct heap_block {
 } block;
 
 #define SIZE sizeof(block)
+pthread_mutex_t mu = PTHREAD_MUTEX_INITIALIZER;
 void *head = NULL;
 block *tail = NULL;
 
@@ -58,7 +60,8 @@ void *malloc(size_t s)
 {
     if(s <= 0)
 	return NULL;
-
+    
+    pthread_mutex_lock(&mu);
     if(!head) {
 	block *tmp = sbrk(s + SIZE);
 	tmp->free = false;
@@ -66,6 +69,7 @@ void *malloc(size_t s)
 	tmp->next = NULL;
 	head = tmp;
 	tail = tmp;
+	pthread_mutex_unlock(&mu);
 	return (void*) (tmp + 1);
     } 
     else {
@@ -78,19 +82,24 @@ void *malloc(size_t s)
 	    tmp->next = NULL;
 	    tail->next = tmp;
 	    tail = tmp;
+	    pthread_mutex_unlock(&mu);
 	    return (void*) (tmp + 1);
 	}
 	else {
-	    if(tmp->size > s + SIZE + 1)
+	    if(tmp->size > s + SIZE + 1) {
+		pthread_mutex_unlock(&mu);
 		return split_block(tmp, s);
+	    }
 	    else {
-	    tmp->free = false;
-	    tmp->size = s;
-	    return (void*) (tmp + 1);
+		tmp->free = false;
+		tmp->size = s;
+		pthread_mutex_unlock(&mu);
+		return (void*) (tmp + 1);
 	    }
 	}
 
     }
+    pthread_mutex_unlock(&mu);
 }
 
 void free(void *ptr) 
