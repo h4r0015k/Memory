@@ -17,6 +17,7 @@ typedef struct heap_block {
 pthread_mutex_t mu = PTHREAD_MUTEX_INITIALIZER;
 void *head = NULL;
 block *tail = NULL;
+void *raw;
 
 void *find_free_block(size_t s) 
 {
@@ -32,6 +33,7 @@ void *find_free_block(size_t s)
 
 void *split_block(block *b, size_t s) 
 {
+    pthread_mutex_lock(&mu);
     block *next = b->next;
     size_t bs = b->size; 
     block *split;
@@ -52,6 +54,7 @@ void *split_block(block *b, size_t s)
 
     --b;
     b->next = split;
+    pthread_mutex_unlock(&mu);
     return (void *) (b + 1);
 
 }
@@ -63,7 +66,12 @@ void *malloc(size_t s)
     
     pthread_mutex_lock(&mu);
     if(!head) {
-	block *tmp = sbrk(s + SIZE);
+	raw = sbrk(s + SIZE);
+
+	if(raw == (void*) -1)
+	    return NULL;
+
+	block *tmp = raw;
 	tmp->free = false;
 	tmp->size = s;
 	tmp->next = NULL;
@@ -76,7 +84,12 @@ void *malloc(size_t s)
 	block *tmp = find_free_block(s);
 	
 	if(!tmp) {
-	    tmp = sbrk(s + SIZE);
+	    raw = sbrk(s + SIZE);
+
+	    if(raw == (void*) -1)
+		return NULL;
+
+	    tmp = raw;
 	    tmp->free = false;
 	    tmp->size = s;
 	    tmp->next = NULL;
@@ -104,7 +117,6 @@ void *malloc(size_t s)
 
 void free(void *ptr) 
 {
-
     if(!ptr)
 	return;
 
@@ -113,3 +125,23 @@ void free(void *ptr)
     tmp->free = true;
 
 } 
+
+void *realloc(void *ptr, size_t s)
+{
+    if(!ptr || !s)
+	return malloc(s);
+
+    block *tmp = (block*) ptr - 1;
+  
+    if(tmp->size > s + SIZE + 1) {
+	return split_block(tmp, s);
+    }
+
+    void *mem = malloc(s);
+    if(mem) {
+	memcpy(mem, ptr, tmp->size);
+	free(ptr);
+    }
+
+    return mem;
+}
