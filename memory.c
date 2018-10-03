@@ -145,3 +145,15 @@ void *realloc(void *ptr, size_t s)
 
     return mem;
 }
+
+void *calloc(size_t nmemb, size_t s)
+{
+    size_t size = nmemb * s;
+    void *tmp = malloc(size);
+
+    if(tmp){
+	memset(tmp, 0, size);
+    }
+
+    return tmp;
+}
